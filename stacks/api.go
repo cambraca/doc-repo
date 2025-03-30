@@ -17,12 +17,12 @@ import (
 
 type ApiStackProps struct {
 	awscdk.NestedStackProps
-	Vpc                     awsec2.IVpc
-	DocumentsBucketName     *string
-	DocumentsBucketArn      *string
-	DatabaseEndpointAddress *string
-	DatabaseEndpointPort    *string
-	DatabaseSecurityGroupId *string
+	Vpc                 awsec2.IVpc
+	DocumentsBucketArn  *string
+	DocumentsBucketName *string
+	//DatabaseEndpointAddress *string
+	//DatabaseEndpointPort    *string
+	//DatabaseSecurityGroupId *string
 }
 
 type ApiStack struct {
@@ -49,9 +49,26 @@ func NewApiStack(scope constructs.Construct, id string, props *ApiStackProps) *A
 	apiTaskDefinition := awsecs.NewFargateTaskDefinition(stack, jsii.String("ApiTaskDefinition"), &awsecs.FargateTaskDefinitionProps{
 		Cpu:            jsii.Number(256),
 		MemoryLimitMiB: jsii.Number(512),
+		ExecutionRole: awsiam.NewRole(stack, jsii.String("ApiTaskExecutionRole"), &awsiam.RoleProps{
+			AssumedBy: awsiam.NewServicePrincipal(jsii.String("ecs-tasks.amazonaws.com"), nil),
+		}),
+		TaskRole: awsiam.NewRole(stack, jsii.String("ApiTaskRole"), &awsiam.RoleProps{
+			AssumedBy: awsiam.NewServicePrincipal(jsii.String("ecs-tasks.amazonaws.com"), nil),
+		}),
 	})
-	_ = apiTaskDefinition.AddContainer(jsii.String("ApiContainer"), &awsecs.ContainerDefinitionOptions{
-		Image: awsecs.ContainerImage_FromRegistry(dockerImageAsset.ImageUri(), nil), // Corrected ImageUri usage
+
+	// Grant ECR pull permission to the EXECUTION ROLE
+	apiTaskDefinition.ExecutionRole().AddToPrincipalPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Actions:   &[]*string{jsii.String("ecr:GetAuthorizationToken")},
+		Resources: &[]*string{jsii.String("*")},
+	}))
+	apiTaskDefinition.ExecutionRole().AddToPrincipalPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Actions:   &[]*string{jsii.String("ecr:BatchCheckLayerAvailability"), jsii.String("ecr:GetDownloadUrlForLayer"), jsii.String("ecr:BatchGetImage")},
+		Resources: &[]*string{dockerImageAsset.Repository().RepositoryArn()}, // Limit to the specific repository
+	}))
+
+	apiTaskDefinition.AddContainer(jsii.String("ApiContainer"), &awsecs.ContainerDefinitionOptions{
+		Image: awsecs.ContainerImage_FromRegistry(dockerImageAsset.ImageUri(), nil),
 		PortMappings: &[]*awsecs.PortMapping{
 			{
 				ContainerPort: jsii.Number(8080),
@@ -74,8 +91,8 @@ func NewApiStack(scope constructs.Construct, id string, props *ApiStackProps) *A
 		Resources: &[]*string{jsii.String(fmt.Sprintf("%s/*", *props.DocumentsBucketArn))},
 	}))
 	//apiTaskDefinition.TaskRole().AddToPrincipalPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-	//	Actions:    &[]*string{jsii.String("rds:Connect")},
-	//	Resources:  &[]*string{jsii.String(fmt.Sprintf("arn:aws:rds:*:%s:db:*", *awscdk.Stack_Of(stack).Account()))},
+	//	Actions:   &[]*string{jsii.String("rds:Connect")},
+	//	Resources: &[]*string{jsii.String(fmt.Sprintf("arn:aws:rds:*:%s:db:*", *awscdk.Stack_Of(stack).Account()))},
 	//	Conditions: &map[string]interface{}{"ArnEquals": map[string]*string{"rds:db-id": jsii.String("postgresdb")}},
 	//}))
 	apiService := awsecspatterns.NewApplicationLoadBalancedFargateService(stack, jsii.String("ApiService"), &awsecspatterns.ApplicationLoadBalancedFargateServiceProps{
@@ -84,13 +101,12 @@ func NewApiStack(scope constructs.Construct, id string, props *ApiStackProps) *A
 		PublicLoadBalancer: jsii.Bool(true),
 		DesiredCount:       jsii.Number(2), // Adjust
 		ListenerPort:       jsii.Number(80),
-		// ContainerPort:      jsii.Number(8080), // Removed here
 	})
-	//apiService.Service().Connections().AllowTo(
-	//	awsec2.Peer_SecurityGroupId(props.DatabaseSecurityGroupId, jsii.String("RDS Access")), // Passing string directly
-	//	awsec2.Port_Tcp(jsii.Number(5432)),
-	//	jsii.String("Allow API access to PostgreSQL"),
-	//)
+	//	apiService.Service().Connections().AllowTo(
+	//		awsec2.Peer_SecurityGroupId(props.DatabaseSecurityGroupId, jsii.String("RDS Access")),
+	//		awsec2.Port_Tcp(jsii.Number(5432)),
+	//		jsii.String("Allow API access to PostgreSQL"),
+	//})
 
 	apiUrlOutput := awscdk.NewCfnOutput(stack, jsii.String("ApiUrl"), &awscdk.CfnOutputProps{
 		Value: apiService.LoadBalancer().LoadBalancerDnsName(),
