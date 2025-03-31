@@ -26,6 +26,7 @@ func statusHandler(w http.ResponseWriter, _ *http.Request) {
 		BucketName:   os.Getenv("DOCUMENTS_BUCKET_NAME"),
 	})
 
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(bytes)
 }

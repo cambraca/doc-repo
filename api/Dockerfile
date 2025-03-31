@@ -3,7 +3,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download -x
 COPY . .
-RUN go build -ldflags "-X main.UTCBuildTime=$(TZ=UTC date +%Y-%m-%d_%H:%M:%S)" main.go
+RUN go build -ldflags "-X main.UTCBuildTime=$(TZ=UTC date +%Y-%m-%dT%H:%M:%SZ)" main.go
 
 FROM alpine:latest
 WORKDIR /app

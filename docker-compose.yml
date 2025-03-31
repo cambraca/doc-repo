@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  api:
+    image: golang:1.24-alpine
+    working_dir: /app
+    volumes:
+      - ./api:/app
+    command: go run main.go
+    ports:
+      - "8088:8080"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=mydb
+    depends_on:
+      - db
+
+  frontend:
+    image: nginx:1.27.4-alpine
+    ports:
+      - "8087:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html
+    depends_on:
+      - api
+
+  db:
+    image: postgres:17.4-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=mydb
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:
