@@ -17,6 +17,7 @@ import (
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"path/filepath"
+	"time"
 )
 
 type WebAppStackProps struct {
@@ -27,8 +28,8 @@ type WebAppStackProps struct {
 
 type WebAppStack struct {
 	awscdk.NestedStack
-	ApiUrlOutput        awscdk.CfnOutput
-	CloudFrontUrlOutput awscdk.CfnOutput
+	ApiUrlOutput      awscdk.CfnOutput
+	FrontendUrlOutput awscdk.CfnOutput
 }
 
 func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackProps) *WebAppStack {
@@ -101,13 +102,18 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 	//	Resources: &[]*string{jsii.String(fmt.Sprintf("arn:aws:rds:*:%s:db:*", *awscdk.Stack_Of(stack).Account()))},
 	//	Conditions: &map[string]interface{}{"ArnEquals": map[string]*string{"rds:db-id": jsii.String("postgresdb")}},
 	//}))
+
 	apiService := awsecspatterns.NewApplicationLoadBalancedFargateService(stack, jsii.String("ApiService"), &awsecspatterns.ApplicationLoadBalancedFargateServiceProps{
 		Cluster:            apiCluster,
 		TaskDefinition:     apiTaskDefinition,
-		PublicLoadBalancer: jsii.Bool(true),
-		DesiredCount:       jsii.Number(1), // How many instances of the api we want to run
-		ListenerPort:       jsii.Number(80),
+		PublicLoadBalancer: jsii.Bool(true), // TODO: restrict so only CloudFront can access this
+		DesiredCount:       jsii.Number(1),  // How many instances of the api we want to run
+		//ListenerPort:       jsii.Number(80),
 		// ContainerPort:      jsii.Number(8080), // Removed here
+		//Protocol:     elbv2.ApplicationProtocol_HTTPS,
+		//RedirectHTTP: jsii.Bool(true),
+		//DomainName:
+		//DomainZone:
 	})
 
 	// Configure the health check for the target group
@@ -115,7 +121,6 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 		Path:     jsii.String("/status"),
 		Port:     jsii.String("8080"),
 		Protocol: elbv2.Protocol_HTTP,
-		//HealthyHttpCodes: jsii.String("200"),
 	})
 
 	//apiService.Service().Connections().AllowTo(
@@ -124,16 +129,30 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 	//	jsii.String("Allow API access to PostgreSQL"),
 	//)
 
-	apiUrl := apiService.LoadBalancer().LoadBalancerDnsName()
+	// --- CloudFront for API ---
+	apiOrigin := awscloudfrontorigins.NewLoadBalancerV2Origin(apiService.LoadBalancer(), &awscloudfrontorigins.LoadBalancerV2OriginProps{
+		ProtocolPolicy: awscloudfront.OriginProtocolPolicy_HTTP_ONLY, // CloudFront talks to ALB over HTTP
+	})
 
-	//ssmParameter := awsssm.NewStringParameter(stack, jsii.String("ApiUrlParam"), &awsssm.StringParameterProps{
-	//	ParameterName: jsii.String(fmt.Sprintf("/%s/api-url", awscdk.Fn_Getenv(jsii.String("ENVIRONMENT"), jsii.String("dev")))),
-	//	StringValue:   apiUrl,
-	//})
+	apiDistribution := awscloudfront.NewDistribution(stack, jsii.String("ApiDistribution"), &awscloudfront.DistributionProps{
+		DefaultBehavior: &awscloudfront.BehaviorOptions{
+			Origin:               apiOrigin,
+			ViewerProtocolPolicy: awscloudfront.ViewerProtocolPolicy_REDIRECT_TO_HTTPS,
+			//AllowedMethods:       awscloudfront.AllowedMethods_ALLOW_ALL(),                              // Or specific methods
+			CachePolicy: awscloudfront.CachePolicy_CACHING_DISABLED(), // API responses are often dynamic
+			//OriginRequestPolicy:  awscloudfront.OriginRequestPolicy_ALL_VIEWER_AND_CLOUDFRONT_2022(), // Forward headers
+		},
+		// You can configure error responses, logging, etc. here
+	})
+
+	apiUrl := fmt.Sprintf("https://%s", *apiDistribution.DomainName())
 
 	apiUrlOutput := awscdk.NewCfnOutput(stack, jsii.String("ApiUrl"), &awscdk.CfnOutputProps{
-		Value: apiUrl,
+		Value: jsii.String(apiUrl),
 	})
+	//awscdk.NewCfnOutput(stack, jsii.String("ApiUrl"), &awscdk.CfnOutputProps{
+	//Value: &apiUrl,
+	//})
 
 	// FRONTEND
 
@@ -144,37 +163,17 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 		AutoDeleteObjects: jsii.Bool(true),
 	})
 
-	// 2. Deploy the frontend files to the S3 bucket
-	awss3deployment.NewBucketDeployment(stack, jsii.String("DeployFrontend"), &awss3deployment.BucketDeploymentProps{
-		Sources: &[]awss3deployment.ISource{
-			awss3deployment.Source_Asset(jsii.String(filepath.Join("..", "frontend", "dist")), nil),
-			awss3deployment.Source_JsonData(jsii.String("config.json"), struct {
-				ApiUrl *string `json:"api_url"`
-			}{
-				//ApiUrl: "temp",
-				ApiUrl: apiUrl,
-				//ApiUrl: props.ApiUrlOutput.ImportValue(),
-				//ApiUrl: props.Temp,
-			}),
-		},
-		DestinationBucket: frontendBucket,
-
-		//Distribution:      distribution,
-		//DistributionPaths: &[]*string{
-		//	jsii.String("/*"),
-		//},
-	})
-
-	// 3. Create a CloudFront distribution to serve the S3 bucket content
+	// 2. Create a CloudFront distribution to serve the S3 bucket content
 	s3Origin := awscloudfrontorigins.S3BucketOrigin_WithOriginAccessControl(frontendBucket, &awscloudfrontorigins.S3BucketOriginWithOACProps{
 		OriginAccessLevels: &[]awscloudfront.AccessLevel{
 			awscloudfront.AccessLevel_READ,
 			awscloudfront.AccessLevel_LIST,
 		},
 	})
-	distribution := awscloudfront.NewDistribution(stack, jsii.String("FrontendDistribution"), &awscloudfront.DistributionProps{
+	frontendDistribution := awscloudfront.NewDistribution(stack, jsii.String("FrontendDistribution"), &awscloudfront.DistributionProps{
 		DefaultBehavior: &awscloudfront.BehaviorOptions{
 			Origin: s3Origin,
+			//CachePolicy: awscloudfront.CachePolicy_CACHING_DISABLED(), // TODO: in prod, caching should be enabled
 			//, &awscloudfrontorigins.S3BucketOriginProps{
 			//	OriginAccessIdentity: nil, // Or your OAI if you're using one
 			//}),
@@ -195,14 +194,34 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 		},
 	})
 
-	// 4. Output the CloudFront distribution URL
-	cloudFrontUrlOutput := awscdk.NewCfnOutput(stack, jsii.String("FrontendUrl"), &awscdk.CfnOutputProps{
-		Value: distribution.DomainName(),
+	// 3. Deploy the frontend files to the S3 bucket
+	awss3deployment.NewBucketDeployment(stack, jsii.String("DeployFrontend"), &awss3deployment.BucketDeploymentProps{
+		Sources: &[]awss3deployment.ISource{
+			awss3deployment.Source_Asset(jsii.String(filepath.Join("..", "frontend", "dist")), nil),
+			awss3deployment.Source_JsonData(jsii.String("config.json"), struct {
+				ApiUrl    string `json:"api_url"`
+				BuildTime string `json:"build_time"`
+			}{
+				ApiUrl:    apiUrl,
+				BuildTime: time.Now().UTC().Format(time.RFC3339),
+			}),
+		},
+		DestinationBucket: frontendBucket,
+
+		Distribution: frontendDistribution,
+		DistributionPaths: &[]*string{
+			jsii.String("/*"),
+		},
+	})
+
+	// 4. Output the CloudFront frontendDistribution URL
+	frontendUrlOutput := awscdk.NewCfnOutput(stack, jsii.String("FrontendUrl"), &awscdk.CfnOutputProps{
+		Value: jsii.String(fmt.Sprintf("https://%s", *frontendDistribution.DomainName())),
 	})
 
 	return &WebAppStack{
-		NestedStack:         stack,
-		ApiUrlOutput:        apiUrlOutput,
-		CloudFrontUrlOutput: cloudFrontUrlOutput,
+		NestedStack:       stack,
+		ApiUrlOutput:      apiUrlOutput,
+		FrontendUrlOutput: frontendUrlOutput,
 	}
 }

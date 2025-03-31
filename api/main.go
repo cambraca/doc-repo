@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-var UTCBuildTime string
+var BuildTime string
 
 func pingHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
@@ -15,15 +15,15 @@ func pingHandler(w http.ResponseWriter, _ *http.Request) {
 
 func statusHandler(w http.ResponseWriter, _ *http.Request) {
 	bytes, _ := json.Marshal(struct {
-		Version      string `json:"version"`
-		Status       string `json:"status"`
-		UTCBuildTime string `json:"utc_build_time"`
-		BucketName   string `json:"bucket_name"`
+		Version    string `json:"version"`
+		Status     string `json:"status"`
+		BuildTime  string `json:"build_time"`
+		BucketName string `json:"bucket_name"`
 	}{
-		Version:      "0.0.6",
-		Status:       "ok",
-		UTCBuildTime: UTCBuildTime,
-		BucketName:   os.Getenv("DOCUMENTS_BUCKET_NAME"),
+		Version:    "0.0.6",
+		Status:     "ok",
+		BuildTime:  BuildTime,
+		BucketName: os.Getenv("DOCUMENTS_BUCKET_NAME"),
 	})
 
 	w.Header().Set("Access-Control-Allow-Origin", "*")
