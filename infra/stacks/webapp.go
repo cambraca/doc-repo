@@ -17,7 +17,6 @@ import (
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"path/filepath"
-	"time"
 )
 
 type WebAppStackProps struct {
@@ -199,11 +198,9 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 		Sources: &[]awss3deployment.ISource{
 			awss3deployment.Source_Asset(jsii.String(filepath.Join("..", "frontend", "dist")), nil),
 			awss3deployment.Source_JsonData(jsii.String("config.json"), struct {
-				ApiUrl    string `json:"api_url"`
-				BuildTime string `json:"build_time"`
+				ApiUrl string `json:"api_url"`
 			}{
-				ApiUrl:    apiUrl,
-				BuildTime: time.Now().UTC().Format(time.RFC3339),
+				ApiUrl: apiUrl,
 			}),
 		},
 		DestinationBucket: frontendBucket,
