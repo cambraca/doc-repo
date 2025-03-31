@@ -1,7 +1,6 @@
 package stacks
 
 import (
-	"fmt"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/constructs-go/constructs/v10"
@@ -28,12 +27,10 @@ func NewDocumentsBucketStack(scope constructs.Construct, id string, props *Docum
 	//	ExportName: jsii.String("DocumentsBucketArn"),
 	//	Value:      documentsBucket.BucketArn(),
 	//})
-	bucketNameOutput := awscdk.NewCfnOutput(stack, jsii.String("DocumentsBucketName"), &awscdk.CfnOutputProps{
-		ExportName: jsii.String("DocumentsBucketName"),
-		Value:      documentsBucket.BucketName(),
-	})
-	//fmt.Printf("CAM temp bucket arn %v name %v\n", *bucketArnOutput.ImportValue(), *bucketNameOutput.ImportValue())
-	fmt.Printf("CAM temp bucket name %v\n", *bucketNameOutput.ImportValue())
+	//bucketNameOutput := awscdk.NewCfnOutput(stack, jsii.String("DocumentsBucketName"), &awscdk.CfnOutputProps{
+	//	ExportName: jsii.String("DocumentsBucketName"),
+	//	Value:      documentsBucket.BucketName(),
+	//})
 
 	return &DocumentsBucketStack{
 		NestedStack: stack,

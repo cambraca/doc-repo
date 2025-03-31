@@ -3,6 +3,8 @@ package stacks
 import (
 	"fmt"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudfront"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudfrontorigins"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsecrassets"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsecs"
@@ -11,24 +13,28 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awss3deployment"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"path/filepath"
 )
 
-type ApiStackProps struct {
+type WebAppStackProps struct {
 	awscdk.NestedStackProps
 	Vpc             awsec2.IVpc
 	DocumentsBucket awss3.IBucket
 }
 
-type ApiStack struct {
+type WebAppStack struct {
 	awscdk.NestedStack
-	ApiUrlOutput awscdk.CfnOutput
+	ApiUrlOutput        awscdk.CfnOutput
+	CloudFrontUrlOutput awscdk.CfnOutput
 }
 
-func NewApiStack(scope constructs.Construct, id string, props *ApiStackProps) *ApiStack {
+func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackProps) *WebAppStack {
 	stack := awscdk.NewNestedStack(scope, &id, &props.NestedStackProps)
+
+	// API
 
 	apiCluster := awsecs.NewCluster(stack, jsii.String("ApiCluster"), &awsecs.ClusterProps{
 		Vpc: props.Vpc,
@@ -118,12 +124,85 @@ func NewApiStack(scope constructs.Construct, id string, props *ApiStackProps) *A
 	//	jsii.String("Allow API access to PostgreSQL"),
 	//)
 
+	apiUrl := apiService.LoadBalancer().LoadBalancerDnsName()
+
+	//ssmParameter := awsssm.NewStringParameter(stack, jsii.String("ApiUrlParam"), &awsssm.StringParameterProps{
+	//	ParameterName: jsii.String(fmt.Sprintf("/%s/api-url", awscdk.Fn_Getenv(jsii.String("ENVIRONMENT"), jsii.String("dev")))),
+	//	StringValue:   apiUrl,
+	//})
+
 	apiUrlOutput := awscdk.NewCfnOutput(stack, jsii.String("ApiUrl"), &awscdk.CfnOutputProps{
-		Value: apiService.LoadBalancer().LoadBalancerDnsName(),
+		Value: apiUrl,
 	})
 
-	return &ApiStack{
-		NestedStack:  stack,
-		ApiUrlOutput: apiUrlOutput,
+	// FRONTEND
+
+	// 1. Create an S3 bucket to host the frontend files
+	frontendBucket := awss3.NewBucket(stack, jsii.String("FrontendBucket"), &awss3.BucketProps{
+		PublicReadAccess:  jsii.Bool(false),
+		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
+		AutoDeleteObjects: jsii.Bool(true),
+	})
+
+	// 2. Deploy the frontend files to the S3 bucket
+	awss3deployment.NewBucketDeployment(stack, jsii.String("DeployFrontend"), &awss3deployment.BucketDeploymentProps{
+		Sources: &[]awss3deployment.ISource{
+			awss3deployment.Source_Asset(jsii.String(filepath.Join("..", "frontend", "dist")), nil),
+			awss3deployment.Source_JsonData(jsii.String("config.json"), struct {
+				ApiUrl *string `json:"api_url"`
+			}{
+				//ApiUrl: "temp",
+				ApiUrl: apiUrl,
+				//ApiUrl: props.ApiUrlOutput.ImportValue(),
+				//ApiUrl: props.Temp,
+			}),
+		},
+		DestinationBucket: frontendBucket,
+
+		//Distribution:      distribution,
+		//DistributionPaths: &[]*string{
+		//	jsii.String("/*"),
+		//},
+	})
+
+	// 3. Create a CloudFront distribution to serve the S3 bucket content
+	s3Origin := awscloudfrontorigins.S3BucketOrigin_WithOriginAccessControl(frontendBucket, &awscloudfrontorigins.S3BucketOriginWithOACProps{
+		OriginAccessLevels: &[]awscloudfront.AccessLevel{
+			awscloudfront.AccessLevel_READ,
+			awscloudfront.AccessLevel_LIST,
+		},
+	})
+	distribution := awscloudfront.NewDistribution(stack, jsii.String("FrontendDistribution"), &awscloudfront.DistributionProps{
+		DefaultBehavior: &awscloudfront.BehaviorOptions{
+			Origin: s3Origin,
+			//, &awscloudfrontorigins.S3BucketOriginProps{
+			//	OriginAccessIdentity: nil, // Or your OAI if you're using one
+			//}),
+			ViewerProtocolPolicy: awscloudfront.ViewerProtocolPolicy_REDIRECT_TO_HTTPS,
+		},
+		DefaultRootObject: jsii.String("index.html"),
+		ErrorResponses: &[]*awscloudfront.ErrorResponse{
+			{
+				HttpStatus:         jsii.Number(403),
+				ResponseHttpStatus: jsii.Number(200),
+				ResponsePagePath:   jsii.String("/index.html"),
+			},
+			{
+				HttpStatus:         jsii.Number(404),
+				ResponseHttpStatus: jsii.Number(200),
+				ResponsePagePath:   jsii.String("/index.html"),
+			},
+		},
+	})
+
+	// 4. Output the CloudFront distribution URL
+	cloudFrontUrlOutput := awscdk.NewCfnOutput(stack, jsii.String("FrontendUrl"), &awscdk.CfnOutputProps{
+		Value: distribution.DomainName(),
+	})
+
+	return &WebAppStack{
+		NestedStack:         stack,
+		ApiUrlOutput:        apiUrlOutput,
+		CloudFrontUrlOutput: cloudFrontUrlOutput,
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/jsii-runtime-go"
 	"infra/stacks"
-	"log"
 )
 
 func main() {
@@ -35,18 +34,6 @@ func main() {
 	//	Vpc: vpcStack.Vpc,
 	//})
 
-	apiStack := stacks.NewApiStack(parentStack, "ApiStack", &stacks.ApiStackProps{
-		NestedStackProps: awscdk.NestedStackProps{
-			Description: jsii.String("Backend API service running on ECS."),
-		},
-		Vpc:             vpcStack.Vpc,
-		DocumentsBucket: documentsBucketStack.Bucket,
-		//DatabaseEndpointAddress: databaseStack.EndpointAddressOutput,
-		//DatabaseEndpointPort:    databaseStack.EndpointPortOutput,
-		//DatabaseSecurityGroupId: databaseStack.SecurityGroupIdOutput,
-	})
-
-	//
 	//stepFunctionStack := stacks.NewStepFunctionStack(parentStack, "StepFunctionStack", &stacks.StepFunctionStackProps{
 	//	NestedStackProps: awscdk.NestedStackProps{
 	//		Description: jsii.String("Step Function workflow for asynchronous tasks."),
@@ -57,15 +44,18 @@ func main() {
 	//	DatabaseSecurityGroupId: databaseStack.SecurityGroupIdOutput,
 	//	ApiUrl:                  apiStack.ApiUrlOutput,
 	//})
-	//
-	frontendStack := stacks.NewFrontendStack(parentStack, "FrontendStack", &stacks.FrontendStackProps{
+
+	stacks.NewWebAppStack(parentStack, "WebApp", &stacks.WebAppStackProps{
 		NestedStackProps: awscdk.NestedStackProps{
-			Description: jsii.String("Frontend web application."),
+			Description: jsii.String("Web app with API service running on ECS and frontend as an S3 deployment."),
 		},
-		ApiUrlOutput: apiStack.ApiUrlOutput,
+		Vpc:             vpcStack.Vpc,
+		DocumentsBucket: documentsBucketStack.Bucket,
+		//DatabaseEndpointAddress: databaseStack.EndpointAddressOutput,
+		//DatabaseEndpointPort:    databaseStack.EndpointPortOutput,
+		//DatabaseSecurityGroupId: databaseStack.SecurityGroupIdOutput,
 	})
 
-	log.Print("Stacks", vpcStack, documentsBucketStack, apiStack, frontendStack)
 	app.Synth(nil)
 }
 
