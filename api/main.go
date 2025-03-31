@@ -7,19 +7,23 @@ import (
 	"os"
 )
 
+var UTCBuildTime string
+
 func pingHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func statusHandler(w http.ResponseWriter, _ *http.Request) {
 	bytes, _ := json.Marshal(struct {
-		Version  string `json:"version"`
-		Status   string `json:"status"`
-		DeployDt string `json:"deploy_dt"`
+		Version      string `json:"version"`
+		Status       string `json:"status"`
+		UTCBuildTime string `json:"utc_build_time"`
+		BucketName   string `json:"bucket_name"`
 	}{
-		Version:  "0.0.5",
-		Status:   "ok",
-		DeployDt: os.Getenv("DEPLOY_DATETIME"),
+		Version:      "0.0.6",
+		Status:       "ok",
+		UTCBuildTime: UTCBuildTime,
+		BucketName:   os.Getenv("DOCUMENTS_BUCKET_NAME"),
 	})
 
 	w.Header().Set("Content-Type", "application/json")
