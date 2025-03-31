@@ -46,7 +46,6 @@ func main() {
 		//DatabaseSecurityGroupId: databaseStack.SecurityGroupIdOutput,
 	})
 
-	log.Print("Stacks", vpcStack, documentsBucketStack, apiStack)
 	//
 	//stepFunctionStack := stacks.NewStepFunctionStack(parentStack, "StepFunctionStack", &stacks.StepFunctionStackProps{
 	//	NestedStackProps: awscdk.NestedStackProps{
@@ -59,14 +58,14 @@ func main() {
 	//	ApiUrl:                  apiStack.ApiUrlOutput,
 	//})
 	//
-	//frontendStack := stacks.NewFrontendStack(parentStack, "FrontendStack", &stacks.FrontendStackProps{
-	//	NestedStackProps: awscdk.NestedStackProps{
-	//		Description: jsii.String("Frontend web application running on ECS."),
-	//	},
-	//	Vpc:    vpcStack.Vpc,
-	//	ApiUrl: apiStack.ApiUrlOutput,
-	//})
+	frontendStack := stacks.NewFrontendStack(parentStack, "FrontendStack", &stacks.FrontendStackProps{
+		NestedStackProps: awscdk.NestedStackProps{
+			Description: jsii.String("Frontend web application."),
+		},
+		ApiUrlOutput: apiStack.ApiUrlOutput,
+	})
 
+	log.Print("Stacks", vpcStack, documentsBucketStack, apiStack, frontendStack)
 	app.Synth(nil)
 }
 
