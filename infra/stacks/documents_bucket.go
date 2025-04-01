@@ -2,7 +2,7 @@ package stacks
 
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
+	s3 "github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
@@ -13,13 +13,13 @@ type DocumentsBucketStackProps struct {
 
 type DocumentsBucketStack struct {
 	awscdk.NestedStack
-	Bucket awss3.IBucket
+	Bucket s3.IBucket
 }
 
 func NewDocumentsBucketStack(scope constructs.Construct, id string, props *DocumentsBucketStackProps) *DocumentsBucketStack {
 	stack := awscdk.NewNestedStack(scope, &id, &props.NestedStackProps)
 
-	documentsBucket := awss3.NewBucket(stack, jsii.String("DocumentsBucket"), &awss3.BucketProps{
+	documentsBucket := s3.NewBucket(stack, jsii.String("DocumentsBucket"), &s3.BucketProps{
 		//RemovalPolicy: awscdk.RemovalPolicy_RETAIN, // TODO: only do this for prod
 	})
 

@@ -45,7 +45,7 @@ func main() {
 	//	ApiUrl:                  apiStack.ApiUrlOutput,
 	//})
 
-	stacks.NewWebAppStack(parentStack, "WebApp", &stacks.WebAppStackProps{
+	webAppStack := stacks.NewWebAppStack(parentStack, "WebApp", &stacks.WebAppStackProps{
 		NestedStackProps: awscdk.NestedStackProps{
 			Description: jsii.String("Web app with API service running on ECS and frontend as an S3 deployment."),
 		},
@@ -54,6 +54,11 @@ func main() {
 		//DatabaseEndpointAddress: databaseStack.EndpointAddressOutput,
 		//DatabaseEndpointPort:    databaseStack.EndpointPortOutput,
 		//DatabaseSecurityGroupId: databaseStack.SecurityGroupIdOutput,
+	})
+
+	awscdk.NewCfnOutput(parentStack, jsii.String("Url"), &awscdk.CfnOutputProps{
+		ExportName: jsii.String("Url"),
+		Value:      webAppStack.FrontendUrlOutput.ImportValue(),
 	})
 
 	app.Synth(nil)

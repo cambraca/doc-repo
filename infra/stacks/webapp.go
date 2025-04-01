@@ -3,17 +3,17 @@ package stacks
 import (
 	"fmt"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudfront"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudfrontorigins"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsecrassets"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsecs"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsecspatterns"
+	cloudfront "github.com/aws/aws-cdk-go/awscdk/v2/awscloudfront"
+	cforigins "github.com/aws/aws-cdk-go/awscdk/v2/awscloudfrontorigins"
+	ec2 "github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
+	ecrassets "github.com/aws/aws-cdk-go/awscdk/v2/awsecrassets"
+	ecs "github.com/aws/aws-cdk-go/awscdk/v2/awsecs"
+	ecspatterns "github.com/aws/aws-cdk-go/awscdk/v2/awsecspatterns"
 	elbv2 "github.com/aws/aws-cdk-go/awscdk/v2/awselasticloadbalancingv2"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awss3deployment"
+	iam "github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
+	logs "github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
+	s3 "github.com/aws/aws-cdk-go/awscdk/v2/awss3"
+	s3deployment "github.com/aws/aws-cdk-go/awscdk/v2/awss3deployment"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"path/filepath"
@@ -21,8 +21,8 @@ import (
 
 type WebAppStackProps struct {
 	awscdk.NestedStackProps
-	Vpc             awsec2.IVpc
-	DocumentsBucket awss3.IBucket
+	Vpc             ec2.IVpc
+	DocumentsBucket s3.IBucket
 }
 
 type WebAppStack struct {
@@ -36,43 +36,43 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 
 	// API
 
-	apiCluster := awsecs.NewCluster(stack, jsii.String("ApiCluster"), &awsecs.ClusterProps{
+	apiCluster := ecs.NewCluster(stack, jsii.String("ApiCluster"), &ecs.ClusterProps{
 		Vpc: props.Vpc,
 	})
-	apiLogGroup := awslogs.NewLogGroup(stack, jsii.String("ApiLogGroup"), &awslogs.LogGroupProps{
-		Retention:     awslogs.RetentionDays_ONE_WEEK,
+	apiLogGroup := logs.NewLogGroup(stack, jsii.String("ApiLogGroup"), &logs.LogGroupProps{
+		Retention:     logs.RetentionDays_ONE_WEEK,
 		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
 	})
 
 	// Build Docker image from local Dockerfile
-	dockerImageAsset := awsecrassets.NewDockerImageAsset(stack, jsii.String("GoApiImage"), &awsecrassets.DockerImageAssetProps{
+	dockerImageAsset := ecrassets.NewDockerImageAsset(stack, jsii.String("GoApiImage"), &ecrassets.DockerImageAssetProps{
 		Directory: jsii.String(filepath.Join("..", "api")),
 	})
 
-	apiTaskDefinition := awsecs.NewFargateTaskDefinition(stack, jsii.String("ApiTaskDefinition"), &awsecs.FargateTaskDefinitionProps{
+	apiTaskDefinition := ecs.NewFargateTaskDefinition(stack, jsii.String("ApiTaskDefinition"), &ecs.FargateTaskDefinitionProps{
 		Cpu:            jsii.Number(256),
 		MemoryLimitMiB: jsii.Number(512),
-		ExecutionRole: awsiam.NewRole(stack, jsii.String("ApiTaskExecutionRole"), &awsiam.RoleProps{
-			AssumedBy: awsiam.NewServicePrincipal(jsii.String("ecs-tasks.amazonaws.com"), nil),
+		ExecutionRole: iam.NewRole(stack, jsii.String("ApiTaskExecutionRole"), &iam.RoleProps{
+			AssumedBy: iam.NewServicePrincipal(jsii.String("ecs-tasks.amazonaws.com"), nil),
 		}),
-		TaskRole: awsiam.NewRole(stack, jsii.String("ApiTaskRole"), &awsiam.RoleProps{
-			AssumedBy: awsiam.NewServicePrincipal(jsii.String("ecs-tasks.amazonaws.com"), nil),
+		TaskRole: iam.NewRole(stack, jsii.String("ApiTaskRole"), &iam.RoleProps{
+			AssumedBy: iam.NewServicePrincipal(jsii.String("ecs-tasks.amazonaws.com"), nil),
 		}),
 	})
 
 	// Grant ECR pull permission to the EXECUTION ROLE
-	apiTaskDefinition.ExecutionRole().AddToPrincipalPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+	apiTaskDefinition.ExecutionRole().AddToPrincipalPolicy(iam.NewPolicyStatement(&iam.PolicyStatementProps{
 		Actions:   &[]*string{jsii.String("ecr:GetAuthorizationToken")},
 		Resources: &[]*string{jsii.String("*")},
 	}))
-	apiTaskDefinition.ExecutionRole().AddToPrincipalPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+	apiTaskDefinition.ExecutionRole().AddToPrincipalPolicy(iam.NewPolicyStatement(&iam.PolicyStatementProps{
 		Actions:   &[]*string{jsii.String("ecr:BatchCheckLayerAvailability"), jsii.String("ecr:GetDownloadUrlForLayer"), jsii.String("ecr:BatchGetImage")},
 		Resources: &[]*string{dockerImageAsset.Repository().RepositoryArn()}, // Limit to the specific repository
 	}))
 
-	apiTaskDefinition.AddContainer(jsii.String("ApiContainer"), &awsecs.ContainerDefinitionOptions{
-		Image: awsecs.ContainerImage_FromRegistry(dockerImageAsset.ImageUri(), nil),
-		PortMappings: &[]*awsecs.PortMapping{
+	apiTaskDefinition.AddContainer(jsii.String("ApiContainer"), &ecs.ContainerDefinitionOptions{
+		Image: ecs.ContainerImage_FromRegistry(dockerImageAsset.ImageUri(), nil),
+		PortMappings: &[]*ecs.PortMapping{
 			{
 				ContainerPort: jsii.Number(8080),
 			},
@@ -84,25 +84,25 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 			//"DATABASE_USER":     jsii.String("admin"),                                                       // Consider Secrets Manager
 			//"DATABASE_PASSWORD": awscdk.SecretValue_PlainText(jsii.String("yourStrongPassword")).ToString(), // Consider Secrets Manager
 		},
-		Logging: awsecs.LogDriver_AwsLogs(&awsecs.AwsLogDriverProps{
+		Logging: ecs.LogDriver_AwsLogs(&ecs.AwsLogDriverProps{
 			LogGroup:     apiLogGroup,
 			StreamPrefix: jsii.String("api"),
 		}),
 	})
-	apiTaskDefinition.TaskRole().AddToPrincipalPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+	apiTaskDefinition.TaskRole().AddToPrincipalPolicy(iam.NewPolicyStatement(&iam.PolicyStatementProps{
 		Actions: &[]*string{
 			jsii.String("s3:GetObject"),
 			jsii.String("s3:PutObject"),
 		},
 		Resources: &[]*string{jsii.String(fmt.Sprintf("%s/*", *props.DocumentsBucket.BucketArn()))},
 	}))
-	//apiTaskDefinition.TaskRole().AddToPrincipalPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+	//apiTaskDefinition.TaskRole().AddToPrincipalPolicy(iam.NewPolicyStatement(&iam.PolicyStatementProps{
 	//	Actions:   &[]*string{jsii.String("rds:Connect")},
 	//	Resources: &[]*string{jsii.String(fmt.Sprintf("arn:aws:rds:*:%s:db:*", *awscdk.Stack_Of(stack).Account()))},
 	//	Conditions: &map[string]interface{}{"ArnEquals": map[string]*string{"rds:db-id": jsii.String("postgresdb")}},
 	//}))
 
-	apiService := awsecspatterns.NewApplicationLoadBalancedFargateService(stack, jsii.String("ApiService"), &awsecspatterns.ApplicationLoadBalancedFargateServiceProps{
+	apiService := ecspatterns.NewApplicationLoadBalancedFargateService(stack, jsii.String("ApiService"), &ecspatterns.ApplicationLoadBalancedFargateServiceProps{
 		Cluster:            apiCluster,
 		TaskDefinition:     apiTaskDefinition,
 		PublicLoadBalancer: jsii.Bool(true), // TODO: restrict so only CloudFront can access this
@@ -123,23 +123,23 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 	})
 
 	//apiService.Service().Connections().AllowTo(
-	//	awsec2.Peer_SecurityGroupId(props.DatabaseSecurityGroupId, jsii.String("RDS Access")),
-	//	awsec2.Port_Tcp(jsii.Number(5432)),
+	//	ec2.Peer_SecurityGroupId(props.DatabaseSecurityGroupId, jsii.String("RDS Access")),
+	//	ec2.Port_Tcp(jsii.Number(5432)),
 	//	jsii.String("Allow API access to PostgreSQL"),
 	//)
 
 	// --- CloudFront for API ---
-	apiOrigin := awscloudfrontorigins.NewLoadBalancerV2Origin(apiService.LoadBalancer(), &awscloudfrontorigins.LoadBalancerV2OriginProps{
-		ProtocolPolicy: awscloudfront.OriginProtocolPolicy_HTTP_ONLY, // CloudFront talks to ALB over HTTP
+	apiOrigin := cforigins.NewLoadBalancerV2Origin(apiService.LoadBalancer(), &cforigins.LoadBalancerV2OriginProps{
+		ProtocolPolicy: cloudfront.OriginProtocolPolicy_HTTP_ONLY, // CloudFront talks to ALB over HTTP
 	})
 
-	apiDistribution := awscloudfront.NewDistribution(stack, jsii.String("ApiDistribution"), &awscloudfront.DistributionProps{
-		DefaultBehavior: &awscloudfront.BehaviorOptions{
+	apiDistribution := cloudfront.NewDistribution(stack, jsii.String("ApiDistribution"), &cloudfront.DistributionProps{
+		DefaultBehavior: &cloudfront.BehaviorOptions{
 			Origin:               apiOrigin,
-			ViewerProtocolPolicy: awscloudfront.ViewerProtocolPolicy_REDIRECT_TO_HTTPS,
-			//AllowedMethods:       awscloudfront.AllowedMethods_ALLOW_ALL(),                              // Or specific methods
-			CachePolicy: awscloudfront.CachePolicy_CACHING_DISABLED(), // API responses are often dynamic
-			//OriginRequestPolicy:  awscloudfront.OriginRequestPolicy_ALL_VIEWER_AND_CLOUDFRONT_2022(), // Forward headers
+			ViewerProtocolPolicy: cloudfront.ViewerProtocolPolicy_REDIRECT_TO_HTTPS,
+			//AllowedMethods:       cloudfront.AllowedMethods_ALLOW_ALL(),                              // Or specific methods
+			CachePolicy: cloudfront.CachePolicy_CACHING_DISABLED(), // API responses are often dynamic
+			//OriginRequestPolicy:  cloudfront.OriginRequestPolicy_ALL_VIEWER_AND_CLOUDFRONT_2022(), // Forward headers
 		},
 		// You can configure error responses, logging, etc. here
 	})
@@ -147,39 +147,37 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 	apiUrl := fmt.Sprintf("https://%s", *apiDistribution.DomainName())
 
 	apiUrlOutput := awscdk.NewCfnOutput(stack, jsii.String("ApiUrl"), &awscdk.CfnOutputProps{
-		Value: jsii.String(apiUrl),
+		ExportName: jsii.String("ApiUrl"),
+		Value:      jsii.String(apiUrl),
 	})
-	//awscdk.NewCfnOutput(stack, jsii.String("ApiUrl"), &awscdk.CfnOutputProps{
-	//Value: &apiUrl,
-	//})
 
 	// FRONTEND
 
-	// 1. Create an S3 bucket to host the frontend files
-	frontendBucket := awss3.NewBucket(stack, jsii.String("FrontendBucket"), &awss3.BucketProps{
+	// S3 bucket to host the frontend files
+	frontendBucket := s3.NewBucket(stack, jsii.String("FrontendBucket"), &s3.BucketProps{
 		PublicReadAccess:  jsii.Bool(false),
 		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
 		AutoDeleteObjects: jsii.Bool(true),
 	})
 
-	// 2. Create a CloudFront distribution to serve the S3 bucket content
-	s3Origin := awscloudfrontorigins.S3BucketOrigin_WithOriginAccessControl(frontendBucket, &awscloudfrontorigins.S3BucketOriginWithOACProps{
-		OriginAccessLevels: &[]awscloudfront.AccessLevel{
-			awscloudfront.AccessLevel_READ,
-			awscloudfront.AccessLevel_LIST,
+	// CloudFront distribution to serve the S3 bucket content
+	s3Origin := cforigins.S3BucketOrigin_WithOriginAccessControl(frontendBucket, &cforigins.S3BucketOriginWithOACProps{
+		OriginAccessLevels: &[]cloudfront.AccessLevel{
+			cloudfront.AccessLevel_READ,
+			cloudfront.AccessLevel_LIST,
 		},
 	})
-	frontendDistribution := awscloudfront.NewDistribution(stack, jsii.String("FrontendDistribution"), &awscloudfront.DistributionProps{
-		DefaultBehavior: &awscloudfront.BehaviorOptions{
+	frontendDistribution := cloudfront.NewDistribution(stack, jsii.String("FrontendDistribution"), &cloudfront.DistributionProps{
+		DefaultBehavior: &cloudfront.BehaviorOptions{
 			Origin: s3Origin,
-			//CachePolicy: awscloudfront.CachePolicy_CACHING_DISABLED(), // TODO: in prod, caching should be enabled
-			//, &awscloudfrontorigins.S3BucketOriginProps{
+			//CachePolicy: cloudfront.CachePolicy_CACHING_DISABLED(), // TODO: in prod, caching should be enabled
+			//, &cforigins.S3BucketOriginProps{
 			//	OriginAccessIdentity: nil, // Or your OAI if you're using one
 			//}),
-			ViewerProtocolPolicy: awscloudfront.ViewerProtocolPolicy_REDIRECT_TO_HTTPS,
+			ViewerProtocolPolicy: cloudfront.ViewerProtocolPolicy_REDIRECT_TO_HTTPS,
 		},
 		DefaultRootObject: jsii.String("index.html"),
-		ErrorResponses: &[]*awscloudfront.ErrorResponse{
+		ErrorResponses: &[]*cloudfront.ErrorResponse{
 			{
 				HttpStatus:         jsii.Number(403),
 				ResponseHttpStatus: jsii.Number(200),
@@ -193,11 +191,11 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 		},
 	})
 
-	// 3. Deploy the frontend files to the S3 bucket
-	awss3deployment.NewBucketDeployment(stack, jsii.String("DeployFrontend"), &awss3deployment.BucketDeploymentProps{
-		Sources: &[]awss3deployment.ISource{
-			awss3deployment.Source_Asset(jsii.String(filepath.Join("..", "frontend", "dist")), nil),
-			awss3deployment.Source_JsonData(jsii.String("config.json"), struct {
+	// Deploy the frontend files to the S3 bucket (and generate config.json)
+	s3deployment.NewBucketDeployment(stack, jsii.String("DeployFrontend"), &s3deployment.BucketDeploymentProps{
+		Sources: &[]s3deployment.ISource{
+			s3deployment.Source_Asset(jsii.String(filepath.Join("..", "frontend", "dist")), nil),
+			s3deployment.Source_JsonData(jsii.String("config.json"), struct {
 				ApiUrl string `json:"api_url"`
 			}{
 				ApiUrl: apiUrl,
@@ -211,9 +209,9 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 		},
 	})
 
-	// 4. Output the CloudFront frontendDistribution URL
 	frontendUrlOutput := awscdk.NewCfnOutput(stack, jsii.String("FrontendUrl"), &awscdk.CfnOutputProps{
-		Value: jsii.String(fmt.Sprintf("https://%s", *frontendDistribution.DomainName())),
+		ExportName: jsii.String("FrontendUrl"),
+		Value:      jsii.String(fmt.Sprintf("https://%s", *frontendDistribution.DomainName())),
 	})
 
 	return &WebAppStack{

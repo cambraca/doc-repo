@@ -112,6 +112,7 @@ package stacks
 //	}))
 //
 //	stepFunctionApiUrlOutput := awscdk.NewCfnOutput(stack, jsii.String("StepFunctionApiUrl"), &awscdk.CfnOutputProps{
+//		ExportName: jsii.String("StepFunctionApiUrl"),
 //		Value: stepFunctionApi.Url(),
 //	})
 //
