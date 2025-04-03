@@ -19,8 +19,6 @@ func RunHttpServer(version, buildTime string) {
 		//AllowCredentials: false,
 		//MaxAge:           12 * time.Hour,
 	}))
-	r.Use(gin.Logger())
-	r.Use(gin.Recovery())
 
 	r.GET("/ping", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 

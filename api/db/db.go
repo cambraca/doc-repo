@@ -27,5 +27,10 @@ func Connect() error {
 }
 
 func RunMigrations() error {
-	return DB.AutoMigrate(&models.Document{})
+	log.Print("Running migrations...")
+	err := DB.AutoMigrate(&models.Document{})
+	if err == nil {
+		log.Print("Migrations done!")
+	}
+	return err
 }
