@@ -1,42 +1,27 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"os"
+	"api/db"
+	"api/service"
+	"log"
 )
 
+var Version = "0.0.3"
 var BuildTime string
 
-func pingHandler(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func statusHandler(w http.ResponseWriter, _ *http.Request) {
-	bytes, _ := json.Marshal(struct {
-		Version    string `json:"version"`
-		Status     string `json:"status"`
-		BuildTime  string `json:"build_time"`
-		BucketName string `json:"bucket_name"`
-	}{
-		Version:    "0.0.6",
-		Status:     "ok",
-		BuildTime:  BuildTime,
-		BucketName: os.Getenv("DOCUMENTS_BUCKET_NAME"),
-	})
-
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(bytes)
-}
-
 func main() {
-	http.HandleFunc("/ping", pingHandler)
-	http.HandleFunc("/status", statusHandler)
-	fmt.Println("Server listening on port 8080...")
-	err := http.ListenAndServe(":8080", nil)
+	var err error
+
+	err = db.Connect()
 	if err != nil {
-		fmt.Println("Error starting server:", err)
+		// TODO change to fatal
+		log.Printf("Could not connect to Postgres: %s", err)
 	}
+
+	//err = db.RunMigrations()
+	//if err != nil {
+	//	log.Fatalf("Migration error: %s", err)
+	//}
+
+	service.RunHttpServer(Version, BuildTime)
 }

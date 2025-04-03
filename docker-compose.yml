@@ -1,27 +1,28 @@
-version: '3.8'
-
 services:
   api:
-    image: golang:1.24-alpine
+    build:
+      dockerfile: api.Dockerfile
     working_dir: /app
     volumes:
-      - ./api:/app
-    command: go run main.go
+      - ./api:/app/src
+    command: CompileDaemon -directory=/app/src -build="go build -o /app/api" -command=/app/api
     ports:
-      - "8088:8080"
+      - "8320:8320"
     environment:
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=postgres
-      - DB_NAME=mydb
+      - DB_NAME=docrepo
+      - DB_SSLMODE=disable
+      - PORT=8320
     depends_on:
       - db
 
   frontend:
     image: nginx:1.27.4-alpine
     ports:
-      - "8087:80"
+      - "8321:80"
     volumes:
       - ./frontend/dist:/usr/share/nginx/html
     depends_on:
@@ -29,10 +30,12 @@ services:
 
   db:
     image: postgres:17.4-alpine
+    ports:
+      - "8322:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=mydb
+      - POSTGRES_DB=docrepo
     volumes:
       - db_data:/var/lib/postgresql/data
 

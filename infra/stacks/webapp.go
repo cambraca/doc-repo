@@ -12,6 +12,7 @@ import (
 	elbv2 "github.com/aws/aws-cdk-go/awscdk/v2/awselasticloadbalancingv2"
 	iam "github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	logs "github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
+	rds "github.com/aws/aws-cdk-go/awscdk/v2/awsrds"
 	s3 "github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	s3deployment "github.com/aws/aws-cdk-go/awscdk/v2/awss3deployment"
 	"github.com/aws/constructs-go/constructs/v10"
@@ -23,6 +24,8 @@ type WebAppStackProps struct {
 	awscdk.NestedStackProps
 	Vpc             ec2.IVpc
 	DocumentsBucket s3.IBucket
+	DbInstance      rds.IDatabaseInstance
+	DbSecurityGroup ec2.ISecurityGroup
 }
 
 type WebAppStack struct {
@@ -79,6 +82,12 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 		},
 		Environment: &map[string]*string{
 			"DOCUMENTS_BUCKET_NAME": props.DocumentsBucket.BucketName(),
+			"DB_HOST":               props.DbInstance.DbInstanceEndpointAddress(),
+			"DB_PORT":               props.DbInstance.DbInstanceEndpointPort(),
+			"DB_USER":               jsii.String("docrepouser"), // TODO: get from db stack
+			"DB_PASSWORD":           jsii.String("abcd1234"),    // TODO: obviously
+			"DB_NAME":               jsii.String("docrepo"),     // TODO: get from db stack
+			"DB_SSLMODE":            jsii.String("require"),
 			//"DATABASE_HOST":         props.DatabaseEndpointAddress,
 			//"DATABASE_PORT":         props.DatabaseEndpointPort,
 			//"DATABASE_USER":     jsii.String("admin"),                                                       // Consider Secrets Manager
@@ -96,23 +105,21 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 		},
 		Resources: &[]*string{jsii.String(fmt.Sprintf("%s/*", *props.DocumentsBucket.BucketArn()))},
 	}))
-	//apiTaskDefinition.TaskRole().AddToPrincipalPolicy(iam.NewPolicyStatement(&iam.PolicyStatementProps{
-	//	Actions:   &[]*string{jsii.String("rds:Connect")},
-	//	Resources: &[]*string{jsii.String(fmt.Sprintf("arn:aws:rds:*:%s:db:*", *awscdk.Stack_Of(stack).Account()))},
-	//	Conditions: &map[string]interface{}{"ArnEquals": map[string]*string{"rds:db-id": jsii.String("postgresdb")}},
-	//}))
+	apiTaskDefinition.TaskRole().AddToPrincipalPolicy(iam.NewPolicyStatement(&iam.PolicyStatementProps{
+		Actions:   &[]*string{jsii.String("rds:Connect")},
+		Resources: &[]*string{props.DbInstance.InstanceArn()},
+		//Resources: &[]*string{jsii.String(fmt.Sprintf("arn:aws:rds:*:%s:db:*", *awscdk.Stack_Of(stack).Account()))},
+		//Conditions: &map[string]interface{}{
+		//	"ArnEquals": map[string]*string{"rds:db-id": jsii.String("postgresdb")},
+		//},
+	}))
 
 	apiService := ecspatterns.NewApplicationLoadBalancedFargateService(stack, jsii.String("ApiService"), &ecspatterns.ApplicationLoadBalancedFargateServiceProps{
 		Cluster:            apiCluster,
 		TaskDefinition:     apiTaskDefinition,
 		PublicLoadBalancer: jsii.Bool(true), // TODO: restrict so only CloudFront can access this
 		DesiredCount:       jsii.Number(1),  // How many instances of the api we want to run
-		//ListenerPort:       jsii.Number(80),
-		// ContainerPort:      jsii.Number(8080), // Removed here
-		//Protocol:     elbv2.ApplicationProtocol_HTTPS,
-		//RedirectHTTP: jsii.Bool(true),
-		//DomainName:
-		//DomainZone:
+		//EphemeralStorageGiB: jsii.Number(21), // GiB (min: 21)
 	})
 
 	// Configure the health check for the target group
@@ -120,13 +127,20 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 		Path:     jsii.String("/status"),
 		Port:     jsii.String("8080"),
 		Protocol: elbv2.Protocol_HTTP,
+
+		// TODO: remove HealthyThresholdCount and Interval
+		// (the default values should be fine; we're lowering them to try to make deploys faster in dev)
+		HealthyThresholdCount: jsii.Number(2),
+		Interval:              awscdk.Duration_Seconds(jsii.Number(5)),
+		Timeout:               awscdk.Duration_Seconds(jsii.Number(4)),
 	})
 
-	//apiService.Service().Connections().AllowTo(
-	//	ec2.Peer_SecurityGroupId(props.DatabaseSecurityGroupId, jsii.String("RDS Access")),
-	//	ec2.Port_Tcp(jsii.Number(5432)),
-	//	jsii.String("Allow API access to PostgreSQL"),
-	//)
+	apiService.Service().Connections().AllowTo(
+		ec2.Peer_SecurityGroupId(props.DbSecurityGroup.SecurityGroupId(), nil), // jsii.String("RDSSecurityGroup")), TODO: ?
+		//ec2.Port_Tcp(props.DbInstance.DbInstanceEndpointPort()),
+		ec2.Port_Tcp(jsii.Number(5432)),
+		jsii.String("Allow API access to PostgreSQL"),
+	)
 
 	// --- CloudFront for API ---
 	apiOrigin := cforigins.NewLoadBalancerV2Origin(apiService.LoadBalancer(), &cforigins.LoadBalancerV2OriginProps{

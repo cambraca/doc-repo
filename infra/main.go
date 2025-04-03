@@ -27,12 +27,12 @@ func main() {
 		},
 	})
 
-	//databaseStack := stacks.NewDatabaseStack(parentStack, "DatabaseStack", &stacks.DatabaseStackProps{
-	//	NestedStackProps: awscdk.NestedStackProps{
-	//		Description: jsii.String("Database for the application backend."),
-	//	},
-	//	Vpc: vpcStack.Vpc,
-	//})
+	databaseStack := stacks.NewDatabaseStack(parentStack, "DatabaseStack", &stacks.DatabaseStackProps{
+		NestedStackProps: awscdk.NestedStackProps{
+			Description: jsii.String("Main application database."),
+		},
+		Vpc: vpcStack.Vpc,
+	})
 
 	//stepFunctionStack := stacks.NewStepFunctionStack(parentStack, "StepFunctionStack", &stacks.StepFunctionStackProps{
 	//	NestedStackProps: awscdk.NestedStackProps{
@@ -51,13 +51,13 @@ func main() {
 		},
 		Vpc:             vpcStack.Vpc,
 		DocumentsBucket: documentsBucketStack.Bucket,
-		//DatabaseEndpointAddress: databaseStack.EndpointAddressOutput,
-		//DatabaseEndpointPort:    databaseStack.EndpointPortOutput,
-		//DatabaseSecurityGroupId: databaseStack.SecurityGroupIdOutput,
+		DbInstance:      databaseStack.Instance,
+		DbSecurityGroup: databaseStack.SecurityGroup,
 	})
 
 	awscdk.NewCfnOutput(parentStack, jsii.String("Url"), &awscdk.CfnOutputProps{
 		ExportName: jsii.String("Url"),
+		Key:        jsii.String("Url"),
 		Value:      webAppStack.FrontendUrlOutput.ImportValue(),
 	})
 

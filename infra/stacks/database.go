@@ -15,11 +15,8 @@ type DatabaseStackProps struct {
 
 type DatabaseStack struct {
 	awscdk.NestedStack
-	EndpointAddressOutput *string
-	EndpointPortOutput    *string
-	SecurityGroupIdOutput *string
-	Instance              rds.IDatabaseInstance
-	SecurityGroup         ec2.ISecurityGroup
+	Instance      rds.IDatabaseInstance
+	SecurityGroup ec2.ISecurityGroup
 }
 
 func NewDatabaseStack(scope constructs.Construct, id string, props *DatabaseStackProps) *DatabaseStack {
@@ -31,7 +28,8 @@ func NewDatabaseStack(scope constructs.Construct, id string, props *DatabaseStac
 		AllowAllOutbound: jsii.Bool(false),
 	})
 	dbSecurityGroup.AddIngressRule(
-		ec2.Peer_Ipv4(props.Vpc.VpcCidrBlock()),
+		//ec2.Peer_Ipv4(props.Vpc.VpcCidrBlock()),
+		ec2.Peer_Ipv4(jsii.String("0.0.0.0/0")), // TODO: this allows access from anywhere; change to ec2.Peer_Ipv4(props.Vpc.VpcCidrBlock())
 		ec2.Port_Tcp(jsii.Number(5432)),
 		jsii.String("Allow PostgreSQL access from within the VPC"),
 		jsii.Bool(false), // TODO is false right?
@@ -40,7 +38,7 @@ func NewDatabaseStack(scope constructs.Construct, id string, props *DatabaseStac
 		Description: jsii.String("asd"), // TODO
 		Vpc:         props.Vpc,
 		//VpcSubnets:         &props.Vpc.PrivateSubnets(),
-		SubnetGroupName: jsii.String("rds-private-subnets"),
+		//SubnetGroupName: jsii.String("rds-private-subnets"),
 	})
 	dbInstance := rds.NewDatabaseInstance(stack, jsii.String("PostgresDB"), &rds.DatabaseInstanceProps{
 		Engine: rds.DatabaseInstanceEngine_Postgres(&rds.PostgresInstanceEngineProps{
@@ -50,32 +48,35 @@ func NewDatabaseStack(scope constructs.Construct, id string, props *DatabaseStac
 		Vpc:              props.Vpc,
 		SubnetGroup:      dbSubnetGroup,
 		SecurityGroups:   &[]ec2.ISecurityGroup{dbSecurityGroup},
-		AllocatedStorage: jsii.Number(1), // GiB
-		//MasterUsername:   jsii.String("admin"),                                            // Replace
-		//MasterPassword:   awscdk.SecretValue_PlainText(jsii.String("yourStrongPassword")), // Replace (consider Secrets Manager)
+		StorageType:      rds.StorageType_GP3,
+		AllocatedStorage: jsii.Number(20),        // GiB (minimum: 20)
+		DatabaseName:     jsii.String("docrepo"), // TODO: pass this to webapp stack
+		Credentials: rds.Credentials_FromUsername( // TODO: good password and pass these to the webapp stack
+			jsii.String("docrepouser"),
+			&rds.CredentialsFromUsernameOptions{
+				Password: awscdk.SecretValue_UnsafePlainText(jsii.String("abcd1234")),
+			},
+		),
 		BackupRetention: awscdk.Duration_Days(jsii.Number(7)),
 		RemovalPolicy:   awscdk.RemovalPolicy_SNAPSHOT, // Consider RETAIN
 	})
 
-	endpointAddressOutput := awscdk.NewCfnOutput(stack, jsii.String("DatabaseEndpointAddress"), &awscdk.CfnOutputProps{
+	awscdk.NewCfnOutput(stack, jsii.String("DatabaseEndpointAddress"), &awscdk.CfnOutputProps{
 		ExportName: jsii.String("DatabaseEndpointAddress"),
 		Value:      dbInstance.DbInstanceEndpointAddress(),
 	})
-	endpointPortOutput := awscdk.NewCfnOutput(stack, jsii.String("DatabaseEndpointPort"), &awscdk.CfnOutputProps{
+	awscdk.NewCfnOutput(stack, jsii.String("DatabaseEndpointPort"), &awscdk.CfnOutputProps{
 		ExportName: jsii.String("DatabaseEndpointPort"),
 		Value:      dbInstance.DbInstanceEndpointPort(),
 	})
-	securityGroupIdOutput := awscdk.NewCfnOutput(stack, jsii.String("DatabaseSecurityGroupId"), &awscdk.CfnOutputProps{
+	awscdk.NewCfnOutput(stack, jsii.String("DatabaseSecurityGroupId"), &awscdk.CfnOutputProps{
 		ExportName: jsii.String("DatabaseSecurityGroupId"),
 		Value:      dbSecurityGroup.SecurityGroupId(),
 	})
 
 	return &DatabaseStack{
-		NestedStack:           stack,
-		EndpointAddressOutput: endpointAddressOutput.ImportValue(),
-		EndpointPortOutput:    endpointPortOutput.ImportValue(),
-		SecurityGroupIdOutput: securityGroupIdOutput.ImportValue(),
-		Instance:              dbInstance,
-		SecurityGroup:         dbSecurityGroup,
+		NestedStack:   stack,
+		Instance:      dbInstance,
+		SecurityGroup: dbSecurityGroup,
 	}
 }

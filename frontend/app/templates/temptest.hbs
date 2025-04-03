@@ -1,0 +1,23 @@
+{{page-title "Temptest"}}
+
+<h1>hi, this is temptest</h1>
+
+docs: {{this.docs.length}}
+{{log this.docs}}
+
+<button type="button" {{on "click" this.loadDocs}}>Load!</button>
+
+<ul>
+  {{#each this.docs as |d|}}
+    <li>
+      name: {{d.name}}
+      <br>type: {{d.mimeType}}
+      <br>complex:
+      {{#each-in d.complexInfo as |a b|}}
+        <strong>{{a}}</strong>: {{b}}
+      {{/each-in}}
+    </li>
+  {{/each}}
+</ul>
+
+bye!
