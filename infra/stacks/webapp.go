@@ -128,11 +128,11 @@ func NewWebAppStack(scope constructs.Construct, id string, props *WebAppStackPro
 		Port:     jsii.String("8080"),
 		Protocol: elbv2.Protocol_HTTP,
 
-		// TODO: remove HealthyThresholdCount and Interval
-		// (the default values should be fine; we're lowering them to try to make deploys faster in dev)
-		HealthyThresholdCount: jsii.Number(2),
-		Interval:              awscdk.Duration_Seconds(jsii.Number(5)),
-		Timeout:               awscdk.Duration_Seconds(jsii.Number(4)),
+		//// TODO: remove these
+		//// (the default values should be fine; we're lowering them to try to make deploys faster in dev)
+		//HealthyThresholdCount: jsii.Number(2),
+		//Interval:              awscdk.Duration_Seconds(jsii.Number(5)),
+		//Timeout:               awscdk.Duration_Seconds(jsii.Number(4)),
 	})
 
 	apiService.Service().Connections().AllowTo(

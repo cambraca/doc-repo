@@ -25,7 +25,7 @@ func NewDatabaseStack(scope constructs.Construct, id string, props *DatabaseStac
 	dbSecurityGroup := ec2.NewSecurityGroup(stack, jsii.String("RDSSecurityGroup"), &ec2.SecurityGroupProps{
 		Vpc:              props.Vpc,
 		Description:      jsii.String("Allow access to RDS PostgreSQL"),
-		AllowAllOutbound: jsii.Bool(false),
+		AllowAllOutbound: jsii.Bool(false), // TODO: uncomment for prod
 	})
 	dbSecurityGroup.AddIngressRule(
 		//ec2.Peer_Ipv4(props.Vpc.VpcCidrBlock()),
@@ -59,6 +59,7 @@ func NewDatabaseStack(scope constructs.Construct, id string, props *DatabaseStac
 		),
 		BackupRetention: awscdk.Duration_Days(jsii.Number(7)),
 		RemovalPolicy:   awscdk.RemovalPolicy_SNAPSHOT, // Consider RETAIN
+		//PubliclyAccessible: jsii.Bool(true),               // TODO: remove for prod?
 	})
 
 	awscdk.NewCfnOutput(stack, jsii.String("DatabaseEndpointAddress"), &awscdk.CfnOutputProps{
