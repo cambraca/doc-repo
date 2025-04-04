@@ -10,7 +10,8 @@ import (
 
 type DatabaseStackProps struct {
 	awscdk.NestedStackProps
-	Vpc ec2.IVpc
+	Vpc                       ec2.IVpc
+	AllowAccessFromEverywhere bool
 }
 
 type DatabaseStack struct {
@@ -25,20 +26,34 @@ func NewDatabaseStack(scope constructs.Construct, id string, props *DatabaseStac
 	dbSecurityGroup := ec2.NewSecurityGroup(stack, jsii.String("RDSSecurityGroup"), &ec2.SecurityGroupProps{
 		Vpc:              props.Vpc,
 		Description:      jsii.String("Allow access to RDS PostgreSQL"),
-		AllowAllOutbound: jsii.Bool(false), // TODO: uncomment for prod
+		AllowAllOutbound: jsii.Bool(props.AllowAccessFromEverywhere),
 	})
+	var peer ec2.IPeer
+	if props.AllowAccessFromEverywhere {
+		// TODO: this allows access from anywhere
+		peer = ec2.Peer_Ipv4(jsii.String("0.0.0.0/0"))
+	} else {
+		peer = ec2.Peer_Ipv4(props.Vpc.VpcCidrBlock())
+	}
 	dbSecurityGroup.AddIngressRule(
-		//ec2.Peer_Ipv4(props.Vpc.VpcCidrBlock()),
-		ec2.Peer_Ipv4(jsii.String("0.0.0.0/0")), // TODO: this allows access from anywhere; change to ec2.Peer_Ipv4(props.Vpc.VpcCidrBlock())
+		peer,
 		ec2.Port_Tcp(jsii.Number(5432)),
 		jsii.String("Allow PostgreSQL access from within the VPC"),
-		jsii.Bool(false), // TODO is false right?
+		jsii.Bool(false), // TODO: is this doing anything?
 	)
-	dbSubnetGroup := rds.NewSubnetGroup(stack, jsii.String("RDSSubnetGroup"), &rds.SubnetGroupProps{
-		Description: jsii.String("asd"), // TODO
+	var subnets *[]ec2.ISubnet
+	var subnetId string
+	if props.AllowAccessFromEverywhere {
+		subnets = props.Vpc.PublicSubnets()
+		subnetId = "RDSPublicSubnetGroup"
+	} else {
+		subnets = props.Vpc.PrivateSubnets()
+		subnetId = "RDSSubnetGroup"
+	}
+	dbSubnetGroup := rds.NewSubnetGroup(stack, jsii.String(subnetId), &rds.SubnetGroupProps{
+		Description: jsii.String("RDSSubnetGroup"),
 		Vpc:         props.Vpc,
-		//VpcSubnets:         &props.Vpc.PrivateSubnets(),
-		//SubnetGroupName: jsii.String("rds-private-subnets"),
+		VpcSubnets:  &ec2.SubnetSelection{Subnets: subnets},
 	})
 	dbInstance := rds.NewDatabaseInstance(stack, jsii.String("PostgresDB"), &rds.DatabaseInstanceProps{
 		Engine: rds.DatabaseInstanceEngine_Postgres(&rds.PostgresInstanceEngineProps{
@@ -57,9 +72,9 @@ func NewDatabaseStack(scope constructs.Construct, id string, props *DatabaseStac
 				Password: awscdk.SecretValue_UnsafePlainText(jsii.String("abcd1234")),
 			},
 		),
-		BackupRetention: awscdk.Duration_Days(jsii.Number(7)),
-		RemovalPolicy:   awscdk.RemovalPolicy_SNAPSHOT, // Consider RETAIN
-		//PubliclyAccessible: jsii.Bool(true),               // TODO: remove for prod?
+		BackupRetention:    awscdk.Duration_Days(jsii.Number(7)),
+		RemovalPolicy:      awscdk.RemovalPolicy_SNAPSHOT, // Consider RETAIN
+		PubliclyAccessible: jsii.Bool(props.AllowAccessFromEverywhere),
 	})
 
 	awscdk.NewCfnOutput(stack, jsii.String("DatabaseEndpointAddress"), &awscdk.CfnOutputProps{

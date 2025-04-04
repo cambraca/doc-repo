@@ -32,6 +32,9 @@ func main() {
 			Description: jsii.String("Main application database."),
 		},
 		Vpc: vpcStack.Vpc,
+
+		// TODO: configure this by env
+		AllowAccessFromEverywhere: true,
 	})
 
 	//stepFunctionStack := stacks.NewStepFunctionStack(parentStack, "StepFunctionStack", &stacks.StepFunctionStackProps{
